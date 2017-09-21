@@ -1,5 +1,6 @@
 import json
 
+
 def i(n):
     return ''.join(['\t' for x in range(n)])
 
@@ -19,11 +20,12 @@ def column(model, config):
         'text': "Text"
     }
     args = {}
-    args['primary_key'] = config['primary_key']
+    if config.get('primary_key', False):
+        args['primary_key'] = config['primary_key']
     foreign_key = ''
     related_assoc = [assoc for assoc in model['associations']
-                     if assoc['foreign_key'] == config['name']]
-    if config['foreign_key'] and len(related_assoc) > 0:
+                     if assoc.get('foreign_key', None) == config['name']]
+    if config.get('foreign_key', False) and len(related_assoc) > 0:
         related_assoc = related_assoc[0]
         foreign_key = ", ForeignKey('%s.%s')" % (
             related_assoc['foreign_table'], related_assoc['primary_key'])
@@ -80,26 +82,34 @@ def secondary_chain(model, assoc_config):
 
 def association(models, model, assoc_config):
     args = {}
-
+    ret = ''
     if assoc_config['type'] == 'has_one':
         args['uselist'] = False
     if assoc_config['inverse_of']:
         args['back_populates'] = "'%s'" % assoc_config['inverse_of']
     if assoc_config['through']:
         primary_assoc = find_primary_assoc(model, assoc_config)
-        args['primaryjoin'] = "'%s'" % join_condition(
-            assoc_config['type'], primary_assoc['joins'], primary_assoc['foreign_key'], model['name'], primary_assoc['primary_key'])
+        if primary_assoc['type'] != 'has_and_belongs_to_many':
+            args['primaryjoin'] = "'%s'" % join_condition(
+                assoc_config['type'], primary_assoc['joins'], primary_assoc['foreign_key'], model['name'], primary_assoc['primary_key'])
 
         args['secondary'] = secondary_chain(model, assoc_config)
-
-    return i(1) + "%s = relationship('%s'%s)" % (assoc_config['name'], assoc_config['joins'], serialize_kvs(args))
+    if assoc_config['type'] == 'has_and_belongs_to_many':
+        args['secondary'] = "'%s'" % assoc_config['join_table']
+        ret += i(1) + \
+            "if not '%s' in Base.metadata.tables:\n" % assoc_config['join_table']
+        ret += i(2) + "Table('%s', Base.metadata, Column('%s', Integer, ForeignKey('%s.%s')), Column('%s', Integer, ForeignKey('%s.%s')))\n" % (
+            assoc_config['join_table'], assoc_config['foreign_key'], model['table_name'], assoc_config['primary_key'], assoc_config['association_foreign_key'], assoc_config['foreign_table'], assoc_config['primary_key'])
+    ret += i(1) + "%s = relationship('%s'%s)" % (
+        assoc_config['name'], assoc_config['joins'], serialize_kvs(args))
+    return ret
 
 
 def to_file(models, model_config):
     ret = []
     p = ret.append
     p("from .Base import Base")
-    p("from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Text")
+    p("from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Text, Table")
     p("from sqlalchemy.orm import relationship")
     p("")
     p("class %s(Base):" % model_config['name'])
@@ -121,9 +131,11 @@ def write_file(root_path, arg):
     [f.write(line + '\n') for line in lines]
     f.close()
 
+
 def produce_models(root_path, data):
     [write_file(root_path, to_file(data, model)) for model in data]
 
     f = open("%s/__init__.py" % root_path, "w")
-    [f.write("from .%s import %s\n" % (model['name'], model['name'])) for model in data]
+    [f.write("from .%s import %s\n" % (model['name'], model['name']))
+     for model in data]
     f.close()
