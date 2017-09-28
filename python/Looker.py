@@ -17,24 +17,25 @@ def column(model, config):
         'datetime': "DateTime",
         'date': "Date",
         'boolean': "Boolean",
-        'text': "Text"
+        'text': "Text",
+        'float': "Float"
     }
     args = {}
     if config.get('primary_key', False):
         args['primary_key'] = config['primary_key']
     foreign_key = ''
     related_assoc = [assoc for assoc in model['associations']
-                     if assoc.get('foreign_key', None) == config['name']]
+                     if assoc.get('primary_key', None) == config['name']]
     if config.get('foreign_key', False) and len(related_assoc) > 0:
         related_assoc = related_assoc[0]
         foreign_key = ", ForeignKey('%s.%s')" % (
-            related_assoc['foreign_table'], related_assoc['primary_key'])
+            related_assoc['foreign_table'], related_assoc['foreign_key'])
     return i(1) + "%s = Column(%s%s%s)" % (config['name'], mapping[config['type']], foreign_key, serialize_kvs(args))
 
 
 # def join_chain(config, assoc_config, current, target):
 def find_primary_assoc(model, assoc_config):
-    if assoc_config['through']:
+    if assoc_config.get('through'):
         return find_primary_assoc(model, [assoc for assoc in model['associations'] if assoc['name'] == assoc_config['through']][0])
     else:
         return assoc_config
@@ -64,7 +65,7 @@ def secondary_chain(model, assoc_config):
     acc += join_condition(direction, model_1, key_1, model_2, key_2)
     acc += ')'
 
-    while next_assoc['through']:
+    while next_assoc.get('through'):
         model_1 = next_assoc['joins']
         key_1 = next_assoc['foreign_key']
         key_2 = next_assoc['primary_key']
@@ -85,9 +86,9 @@ def association(models, model, assoc_config):
     ret = ''
     if assoc_config['type'] == 'has_one':
         args['uselist'] = False
-    if assoc_config['inverse_of']:
+    if assoc_config.get('inverse_of'):
         args['back_populates'] = "'%s'" % assoc_config['inverse_of']
-    if assoc_config['through']:
+    if assoc_config.get('through'):
         primary_assoc = find_primary_assoc(model, assoc_config)
         if primary_assoc['type'] != 'has_and_belongs_to_many':
             args['primaryjoin'] = "'%s'" % join_condition(
@@ -109,14 +110,20 @@ def to_file(models, model_config):
     ret = []
     p = ret.append
     p("from .Base import Base")
-    p("from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Text, Table")
+    p("from sqlalchemy import Column, Integer, String, ForeignKey, Date, DateTime, Boolean, Text, Table, Float")
     p("from sqlalchemy.orm import relationship")
     p("")
     p("class %s(Base):" % model_config['name'])
     p(i(1) + "__tablename__ = '%s'" % model_config['table_name'])
     p("")
 
-    ret.extend([column(model_config, col) for col in model_config['columns']])
+    if True in (col.get('primary_key', False) for col in model_config['columns']):
+        ret.extend([column(model_config, col) for col in model_config['columns']])
+    else:
+        first_column = model_config['columns'][0]
+        first_column["primary_key"] = True
+        ret.append(column(model_config, first_column))
+        ret.extend([column(model_config, col) for col in model_config['columns'][1:]])
     p("")
 
     ret.extend([association(models, model_config, col)
