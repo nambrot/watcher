@@ -1,6 +1,6 @@
-from Looker import produce_models
+from Watcher import produce_models
 import json
-with open("data.json") as file:
+with open("discourse.json") as file:
   print(
     produce_models(
       'models',

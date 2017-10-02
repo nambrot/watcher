@@ -39,7 +39,7 @@ def column(model, config):
         related_assoc = related_assoc[0]
         foreign_key = ", ForeignKey('%s.%s')" % (
             related_assoc['foreign_table'], related_assoc['foreign_key'])
-    return i(1) + "%s = Column(%s%s%s)" % (escape_column_name(config['name']), mapping[config['type']], foreign_key, serialize_kvs(args))
+    return i(1) + "%s = Column(%s%s%s)" % (escape_column_name(config['name']), mapping.get(config['type'], 'String'), foreign_key, serialize_kvs(args))
 
 
 # def join_chain(config, assoc_config, current, target):
@@ -84,7 +84,7 @@ def secondary_chain(model, assoc_config):
         model_2 = next_assoc['joins']
 
         acc += ".join(%s, " % model_2
-        acc += "%s.%s == %s.%s" % (direction, model_1, key_1, model_2, key_2)
+        acc += "%s.%s == %s.%s" % (model_1, key_1, model_2, key_2)
         acc += ')'
 
     return "'%s'" % acc
@@ -94,7 +94,7 @@ def association(models, model, assoc_config):
     args = {}
     ret = ''
     args['primaryjoin'] = "'%s.%s == %s.%s'" % (
-                assoc_config['type'], assoc_config['joins'], assoc_config['foreign_key'], model['name'], assoc_config['primary_key'])
+                assoc_config['joins'], assoc_config['foreign_key'], model['name'], assoc_config['primary_key'])
     if assoc_config['type'] == 'has_one':
         args['uselist'] = False
     if assoc_config.get('inverse_of'):
@@ -103,7 +103,7 @@ def association(models, model, assoc_config):
         primary_assoc = find_primary_assoc(model, assoc_config)
         if primary_assoc['type'] != 'has_and_belongs_to_many':
             args['primaryjoin'] = "'%s.%s == %s.%s'" % (
-                assoc_config['type'], primary_assoc['joins'], primary_assoc['foreign_key'], model['name'], primary_assoc['primary_key'])
+                primary_assoc['joins'], primary_assoc['foreign_key'], model['name'], primary_assoc['primary_key'])
 
         args['secondary'] = secondary_chain(model, assoc_config)
     ret += i(1) + "%s = relationship('%s'%s)" % (

@@ -15,7 +15,7 @@ class Watcher
   def serialized_column(column_name, column_type, model, foreign_keys)
     ret = { name: column_name, type: column_type.type }
 
-    ret[:primary_key] = true if column_name == model.primary_key
+    ret[:primary_key] = true if column_name == (model.primary_key rescue nil)
     ret[:foreign_key] = true if foreign_keys.include?(column_name)
     ret
   end
@@ -29,12 +29,14 @@ class Watcher
         reflection.macro.in? %i{has_many has_one}
       end
     return [] if reflection.options[:as]
+    primary_key = reflection.association_primary_key rescue 'id'
+
     ret = {
       name: reflection_name,
       joins: reflection.class_name,
       foreign_table: reflection.table_name,
-      foreign_key: foreign_key_on_foreign_table ? reflection.foreign_key : reflection.association_primary_key,
-      primary_key: foreign_key_on_foreign_table ? reflection.association_primary_key : reflection.foreign_key,
+      foreign_key: foreign_key_on_foreign_table ? reflection.foreign_key : primary_key,
+      primary_key: foreign_key_on_foreign_table ? primary_key : reflection.foreign_key,
       type: reflection.macro,
       through: reflection.options[:through],
       inverse_of: reflection.inverse_of.try(:name),
@@ -51,7 +53,7 @@ class Watcher
         joins: reflection.join_table.camelize,
         foreign_table: reflection.join_table,
         foreign_key: reflection.foreign_key,
-        primary_key: reflection.association_primary_key,
+        primary_key: primary_key,
         type: :has_many
       }
     end
@@ -110,8 +112,8 @@ class Watcher
         table_name: model.table_name,
         columns:
           model
-            .column_types
-            .map { |column_name, column_type| serialized_column(column_name, column_type, model, foreign_keys) },
+            .columns_hash
+            .map { |column_name, column| serialized_column(column_name, column, model, foreign_keys) },
         associations:
           model
             .reflections
