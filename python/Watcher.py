@@ -10,6 +10,14 @@ def serialize_kvs(kvs):
                     for key, value in kvs.items()])
 
 
+def escape_column_name(column_name):
+    mapping = {
+        'from': 'from_col',
+        'type': 'type_col'
+    }
+
+    return mapping.get(column_name, column_name)
+
 def column(model, config):
     mapping = {
         'integer': "Integer",
@@ -18,7 +26,8 @@ def column(model, config):
         'date': "Date",
         'boolean': "Boolean",
         'text': "Text",
-        'float': "Float"
+        'float': "Float",
+        'decimal': "Float"
     }
     args = {}
     if config.get('primary_key', False):
@@ -30,7 +39,7 @@ def column(model, config):
         related_assoc = related_assoc[0]
         foreign_key = ", ForeignKey('%s.%s')" % (
             related_assoc['foreign_table'], related_assoc['foreign_key'])
-    return i(1) + "%s = Column(%s%s%s)" % (config['name'], mapping[config['type']], foreign_key, serialize_kvs(args))
+    return i(1) + "%s = Column(%s%s%s)" % (escape_column_name(config['name']), mapping[config['type']], foreign_key, serialize_kvs(args))
 
 
 # def join_chain(config, assoc_config, current, target):
@@ -42,10 +51,10 @@ def find_primary_assoc(model, assoc_config):
 
 
 def join_condition(assoc_type, model_1, key_1, model_2, key_2):
-    if assoc_type == 'has_many':
-        return "%s.%s == %s.%s" % (model_1, key_1, model_2, key_2)
-    else:
-        return "%s.%s == %s.%s" % (model_1, key_2, model_2, key_1)
+    # if assoc_type == 'has_many':
+        # return "%s.%s == %s.%s" % (model_1, key_1, model_2, key_2)
+    # else:
+    return "%s.%s == %s.%s" % (model_1, key_1, model_2, key_2)
 
 
 def secondary_chain(model, assoc_config):
@@ -75,7 +84,7 @@ def secondary_chain(model, assoc_config):
         model_2 = next_assoc['joins']
 
         acc += ".join(%s, " % model_2
-        acc += join_condition(direction, model_1, key_1, model_2, key_2)
+        acc += "%s.%s == %s.%s" % (direction, model_1, key_1, model_2, key_2)
         acc += ')'
 
     return "'%s'" % acc
@@ -84,6 +93,8 @@ def secondary_chain(model, assoc_config):
 def association(models, model, assoc_config):
     args = {}
     ret = ''
+    args['primaryjoin'] = "'%s.%s == %s.%s'" % (
+                assoc_config['type'], assoc_config['joins'], assoc_config['foreign_key'], model['name'], assoc_config['primary_key'])
     if assoc_config['type'] == 'has_one':
         args['uselist'] = False
     if assoc_config.get('inverse_of'):
@@ -91,16 +102,10 @@ def association(models, model, assoc_config):
     if assoc_config.get('through'):
         primary_assoc = find_primary_assoc(model, assoc_config)
         if primary_assoc['type'] != 'has_and_belongs_to_many':
-            args['primaryjoin'] = "'%s'" % join_condition(
+            args['primaryjoin'] = "'%s.%s == %s.%s'" % (
                 assoc_config['type'], primary_assoc['joins'], primary_assoc['foreign_key'], model['name'], primary_assoc['primary_key'])
 
         args['secondary'] = secondary_chain(model, assoc_config)
-    if assoc_config['type'] == 'has_and_belongs_to_many':
-        args['secondary'] = "'%s'" % assoc_config['join_table']
-        ret += i(1) + \
-            "if not '%s' in Base.metadata.tables:\n" % assoc_config['join_table']
-        ret += i(2) + "Table('%s', Base.metadata, Column('%s', Integer, ForeignKey('%s.%s')), Column('%s', Integer, ForeignKey('%s.%s')))\n" % (
-            assoc_config['join_table'], assoc_config['foreign_key'], model['table_name'], assoc_config['primary_key'], assoc_config['association_foreign_key'], assoc_config['foreign_table'], assoc_config['primary_key'])
     ret += i(1) + "%s = relationship('%s'%s)" % (
         assoc_config['name'], assoc_config['joins'], serialize_kvs(args))
     return ret
