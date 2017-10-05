@@ -1,6 +1,6 @@
 # Watcher
 
-Watcher was started with the idea that having an expressive cross-platform data modelling layer can enable an ecosystem of more advanced data analysis tools that currently would require significant investments that only happen within larger, more resourceful organizations. Watcher is inspired by [Looker](https://looker.com/), but aims to have an open source foundation.
+Watcher was started with the idea that having an expressive cross-platform data modelling layer can enable an ecosystem of more advanced data analysis tools that currently would require significant investments that only happen within larger, more resourceful organizations. Watcher is inspired by [Looker](https://looker.com/), but aims to have an open source foundation. Also see my [blog post](https://nambrot.com/posts/28-higher-level-data-model-wanted/)
 
 # The problem
 
